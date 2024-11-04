@@ -3,12 +3,57 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Map Plotter</title>
+    <title>Interactive Map Plotter with Distance Logo</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <style>
         #map {
             height: 600px;
             width: 100%;
+        }
+        .file-upload {
+            margin-top: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .file-label {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .file-label:hover {
+            background-color: #0056b3;
+        }
+        #fileInput {
+            display: none;
+        }
+        #fileName {
+            font-size: 16px;
+        }
+        #loadingSpinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #007bff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .distance-logo {
+            background-color: rgba(0, 0, 0, 0.7);
+            color: #fff;
+            padding: 8px 15px;
+            font-size: 14px;
+            border-radius: 5px;
+            box-shadow: 0px 0px 5px rgba(0, 0, 0, 0.5);
+            font-weight: bold;
         }
         .zoom-button {
             background-color: white;
@@ -29,6 +74,11 @@
 </head>
 <body>
     <h1>Upload Excel/CSV File to Plot Latitude and Longitude</h1>
+    <div class="file-upload">
+        <label class="file-label" for="fileInput">Select File</label>
+        <span id="fileName">No file selected</span>
+        <div id="loadingSpinner"></div>
+    </div>
     <input type="file" id="fileInput" accept=".csv, .xlsx" />
     <div id="map"></div>
 
@@ -36,13 +86,17 @@
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script>
         const map = L.map('map').setView([0, 0], 2); // Default view
+        const fileInput = document.getElementById('fileInput');
+        const fileNameDisplay = document.getElementById('fileName');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+        let distanceLogo;
 
         // Add OpenStreetMap tiles
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
         }).addTo(map);
 
-        document.getElementById('fileInput').addEventListener('change', handleFileSelect);
+        fileInput.addEventListener('change', handleFileSelect);
 
         function handleFileSelect(event) {
             const file = event.target.files[0];
@@ -50,7 +104,13 @@
                 alert("No file selected!");
                 return;
             }
-            
+
+            // Display selected file name
+            fileNameDisplay.textContent = file.name;
+
+            // Show loading spinner
+            loadingSpinner.style.display = 'inline-block';
+
             const reader = new FileReader();
             reader.onload = function (e) {
                 try {
@@ -63,9 +123,13 @@
 
                     console.log("Parsed Data:", json); // Log parsed data
                     plotData(json);
+
+                    // Hide loading spinner after plot
+                    loadingSpinner.style.display = 'none';
                 } catch (error) {
                     console.error("Error reading the file:", error);
                     alert("Error reading the file. Please ensure it is a valid Excel or CSV file.");
+                    loadingSpinner.style.display = 'none';
                 }
             };
 
@@ -74,29 +138,59 @@
 
         function plotData(data) {
             const latLngs = [];
+            let totalDistance = 0;
+
             data.forEach(row => {
                 const lat = parseFloat(row['LATITUDE']);
                 const lon = parseFloat(row['LONGITUDE']);
 
-                // Log each coordinate to ensure they are parsed correctly
-                console.log(`LATITUDE: ${lat}, LONGITUDE: ${lon}`);
-
                 if (!isNaN(lat) && !isNaN(lon)) {
                     latLngs.push([lat, lon]);
-                } else {
-                    console.error('Invalid coordinates in row:', row);
                 }
             });
 
             // Check if there are valid coordinates to plot
             if (latLngs.length > 1) {
+                // Calculate total distance using Haversine formula
+                for (let i = 1; i < latLngs.length; i++) {
+                    totalDistance += calculateDistance(latLngs[i - 1], latLngs[i]);
+                }
+
+                // Convert to kilometers and round to 2 decimal places
+                totalDistance = totalDistance.toFixed(2);
+
+                // Update the distance logo on the map
+                if (distanceLogo) {
+                    map.removeControl(distanceLogo);
+                }
+                distanceLogo = L.control({ position: 'topright' });
+                distanceLogo.onAdd = function () {
+                    const div = L.DomUtil.create('div', 'distance-logo');
+                    div.innerHTML = `Total Distance: ${totalDistance} km`;
+                    return div;
+                };
+                distanceLogo.addTo(map);
+
                 const polyline = L.polyline(latLngs, { color: 'blue' }).addTo(map);
                 map.fitBounds(polyline.getBounds()); // Adjust map view to fit the polyline
-                console.log("Polyline successfully added to map");
             } else {
-                console.warn("No valid coordinates to plot.");
                 alert("No valid coordinates found in the file to plot on the map.");
             }
+        }
+
+        // Haversine formula to calculate distance between two points in km
+        function calculateDistance(coord1, coord2) {
+            const R = 6371; // Radius of the Earth in kilometers
+            const lat1 = coord1[0] * Math.PI / 180;
+            const lat2 = coord2[0] * Math.PI / 180;
+            const dLat = (coord2[0] - coord1[0]) * Math.PI / 180;
+            const dLon = (coord2[1] - coord1[1]) * Math.PI / 180;
+
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                      Math.cos(lat1) * Math.cos(lat2) *
+                      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
         }
 
         // Zoom In Function
@@ -108,7 +202,7 @@
         function zoomOut() {
             map.zoomOut();
         }
-        
+
         // Create Zoom Control Buttons
         const zoomInButton = L.control({ position: 'topleft' });
         zoomInButton.onAdd = function () {
