@@ -1,25 +1,29 @@
-import logo from './logo.svg';
-import './App.css';
+// src/App.js
 
-function App() {
-  return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
-  );
-}
+import React, { useState } from 'react';
+import FileUpload from './components/FileUpload'; // Updated path
+
+const App = () => {
+    const [coordinates, setCoordinates] = useState([]);
+
+    const handleDataProcessed = (data) => {
+        // Assuming the columns are named 'LATITUDE' and 'LONGITUDE'
+        const newCoordinates = data.map((row) => ({
+            latitude: row.LATITUDE,
+            longitude: row.LONGITUDE,
+        })).filter(coord => coord.latitude && coord.longitude);
+
+        setCoordinates(newCoordinates);
+    };
+
+    return (
+        <div>
+            <h1>Latitude and Longitude Map</h1>
+            <FileUpload onDataProcessed={handleDataProcessed} />
+            {/* The map will go here in the next steps */}
+            <pre>{JSON.stringify(coordinates, null, 2)}</pre>
+        </div>
+    );
+};
 
 export default App;
