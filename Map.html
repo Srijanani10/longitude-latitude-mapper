@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Map Plotter</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        #map {
+            height: 600px;
+            width: 100%;
+        }
+        .zoom-button {
+            background-color: white;
+            border: 2px solid #007bff;
+            border-radius: 4px;
+            margin: 5px;
+            padding: 5px;
+            cursor: pointer;
+        }
+        .zoom-button button {
+            background: none;
+            border: none;
+            color: #007bff;
+            font-size: 14px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>Upload Excel/CSV File to Plot Latitude and Longitude</h1>
+    <input type="file" id="fileInput" accept=".csv, .xlsx" />
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+        const map = L.map('map').setView([0, 0], 2); // Default view
+
+        // Add OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+        }).addTo(map);
+
+        document.getElementById('fileInput').addEventListener('change', handleFileSelect);
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) {
+                alert("No file selected!");
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+
+                    // Assuming the first sheet is the one we want
+                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const json = XLSX.utils.sheet_to_json(worksheet);
+
+                    console.log("Parsed Data:", json); // Log parsed data
+                    plotData(json);
+                } catch (error) {
+                    console.error("Error reading the file:", error);
+                    alert("Error reading the file. Please ensure it is a valid Excel or CSV file.");
+                }
+            };
+
+            reader.readAsArrayBuffer(file);
+        }
+
+        function plotData(data) {
+            const latLngs = [];
+            data.forEach(row => {
+                const lat = parseFloat(row['LATITUDE']);
+                const lon = parseFloat(row['LONGITUDE']);
+
+                // Log each coordinate to ensure they are parsed correctly
+                console.log(`LATITUDE: ${lat}, LONGITUDE: ${lon}`);
+
+                if (!isNaN(lat) && !isNaN(lon)) {
+                    latLngs.push([lat, lon]);
+                } else {
+                    console.error('Invalid coordinates in row:', row);
+                }
+            });
+
+            // Check if there are valid coordinates to plot
+            if (latLngs.length > 1) {
+                const polyline = L.polyline(latLngs, { color: 'blue' }).addTo(map);
+                map.fitBounds(polyline.getBounds()); // Adjust map view to fit the polyline
+                console.log("Polyline successfully added to map");
+            } else {
+                console.warn("No valid coordinates to plot.");
+                alert("No valid coordinates found in the file to plot on the map.");
+            }
+        }
+
+        // Zoom In Function
+        function zoomIn() {
+            map.zoomIn();
+        }
+
+        // Zoom Out Function
+        function zoomOut() {
+            map.zoomOut();
+        }
+        
+        // Create Zoom Control Buttons
+        const zoomInButton = L.control({ position: 'topleft' });
+        zoomInButton.onAdd = function () {
+            const div = L.DomUtil.create('div', 'zoom-button');
+            div.innerHTML = '<button onclick="zoomIn()">Zoom In</button>';
+            return div;
+        };
+        zoomInButton.addTo(map);
+
+        const zoomOutButton = L.control({ position: 'topleft' });
+        zoomOutButton.onAdd = function () {
+            const div = L.DomUtil.create('div', 'zoom-button');
+            div.innerHTML = '<button onclick="zoomOut()">Zoom Out</button>';
+            return div;
+        };
+        zoomOutButton.addTo(map);
+    </script>
+</body>
+</html>
